@@ -741,9 +741,9 @@ It's important to run `HttpTestingController.verify` to make sure that there are
 
 # Testing Angular Building Blocks
 ## AAA
-1.	Arrange inputs and targets. Arrange steps should set up the test case. Does the test require any objects or special settings? Does it need to prepare a database? Does it need to log into a web app? Handle all of these operations at the start of the test.
-2.	Act on the target behavior. Act steps should cover the main thing to be tested. This could be calling a function or method, calling a REST API, or interacting with a web page. Keep actions focused on the target behavior.
-3.	Assert expected outcomes. Act steps should elicit some sort of response. Assert steps verify the goodness or badness of that response. Sometimes, assertions are as simple as checking numeric or string values. Other times, they may require checking multiple facets of a system. Assertions will ultimately determine if the test passes or fails.
+1.	**Arrange** inputs and targets. Arrange steps should set up the test case. Does the test require any objects or special settings? Does it need to prepare a database? Does it need to log into a web app? Handle all of these operations at the start of the test.
+2.	**Act** on the target behavior. Act steps should cover the main thing to be tested. This could be calling a function or method, calling a REST API, or interacting with a web page. Keep actions focused on the target behavior.
+3.	**Assert** expected outcomes. Act steps should elicit some sort of response. Assert steps verify the goodness or badness of that response. Sometimes, assertions are as simple as checking numeric or string values. Other times, they may require checking multiple facets of a system. Assertions will ultimately determine if the test passes or fails.
 
 ```ts
 describe('DashboardComponent', () => {
@@ -854,5 +854,172 @@ fit('should dispay notification container when notification button clicked', () 
     expect(notificationContainer).toBeTruthy();
   });
 ```
-
 ![Dom interaction](/.imgs/dom-interaction-2.png)
+
+### Automatic change detection
+If the tests frequently call detectChanges.
+```ts
+TestBed.configureTestingModule({
+  declarations: [BannerComponent],
+  providers: [{ provide: ComponentFixtureAutoDetect, useValue: true }],
+});
+```
+
+### Testing with injected dependency
+A component-under-test doesn't have to be injected with real services. In fact, it is usually
+better if they are test doubles such as, stubs, fakes, spies, or mocks. The purpose of the
+spec is to test the component, not the service, and real services can be trouble.
+Injecting the real UserService could be a nightmare. The real service might ask the user for
+login credentials and attempt to reach an authentication server. These behaviors can be
+hard to intercept. It is far easier and safer to create and register a test double in place of the real UserService.
+
+```ts
+@Component({
+  templateUrl: "./author-list.component.html",
+  styleUrls: ["./author-list.component.scss"],
+})
+export class AuthorListComponent {
+  constructor(
+    private gql: GetAuthorsGQL,
+    private activatedRoute: ActivatedRoute,
+    private router: Router,
+    private alertService: MessageAlertService
+  ) {}
+}
+```
+
+```ts
+beforeEach(async () => {
+  await TestBed.configureTestingModule({
+    declarations: [AuthorListComponent],
+    imports: [PaginationModule, RouterTestingModule],
+    providers: [
+      {
+        provide: GetAuthorsGQL,
+        useValue: mockQueryGql,
+      },
+      {
+        provide: ActivatedRoute,
+        useValue: {
+          queryParams: of({
+            size: 3,
+            page: 2,
+          }),
+        },
+      },
+    ],
+  }).compileComponents();
+  fixture = TestBed.createComponent(AuthorListComponent);
+  component = fixture.componentInstance;
+  router = TestBed.inject(Router);
+});
+```
+
+```ts
+export const mockQueryGql = {
+  watch: () => {
+    return {
+      valueChanges: {
+        subscribe: () => {},
+      },
+      refetch: () => {},
+    };
+  },
+  fetch: (variables?: any) => {
+    return { subscribe: () => {} };
+  },
+};
+```
+
+```ts
+it("should refetch query on ngOnInit", () => {
+  const queryVariables = component.queryVariables;
+  const queryRefRefetchSpy = spyOn<any>(component.queryRef, "refetch");
+  component.ngOnInit();
+  expect(queryRefRefetchSpy).toHaveBeenCalledOnceWith(queryVariables);
+});
+```
+
+```ts
+it("should turn off loading panel after onValidFormSubmit", () => {
+  const mockMutationResult: MutationResult<AddAuthorMutation> = {
+    loading: false,
+    data: {
+      addAuthor: {
+        message: null,
+        data: { id: "12345" },
+        errors: null,
+        __typename: "AddAuthorPayload",
+      },
+    },
+  };
+  spyOn(component["router"], "navigate");
+  spyOn(component["gql"], "mutate").and.returnValue(of(mockMutationResult));
+  expect(component.isPanelLoading).not.toBeTrue();
+  component.onValidFormSubmit(formOutput);
+  expect(component.isPanelLoading).not.toBeTrue();
+});
+```
+
+### Component with inputs and outputs
+
+```ts
+@Component({
+  selector: "app-pagination",
+  templateUrl: "./pagination.component.html",
+})
+export class PaginationComponent {
+  @Input("totalCount")
+  get totalCount(): number {
+    return this._totalCount;
+  }
+  set totalCount(totalCount: number | undefined) {
+    this._totalCount = totalCount ?? 0;
+    this.lastPage = totalCount ? Math.ceil(totalCount / this._pageSize) : 1;
+  }
+  @Output("pageSizeChanged")
+  private pageSizeChanged: EventEmitter<number> = new EventEmitter<number>();
+  constructor() {}
+}
+```
+
+```ts
+it("should set last page on setting totalCount", () => {
+  component.totalCount = 10;
+  fixture.detectChanges();
+  expect(component.totalCount).toEqual(10);
+  expect(component.lastPage).toEqual(10);
+});
+```
+
+```ts
+it("should emit pageSizeChanged on pageSize change", () => {
+  let pageSizeChangedOutputSpy = spyOn(component["pageSizeChanged"], "emit");
+  component.pageSizes = [1, 2, 3];
+  fixture.detectChanges();
+  let selectElement = fixture.nativeElement.querySelector("select") as HTMLSelectElement;
+  selectElement.selectedIndex = 1;
+  selectElement.dispatchEvent(new Event("change"));
+  fixture.detectChanges();
+  expect(pageSizeChangedOutputSpy).toHaveBeenCalled();
+});
+```
+
+## Testing services
+## Testing attribute directives
+## Testing pipes
+## Testing utility APIs
+
+# Debugging tests
+
+# Code coverage
+
+# Hat Tips & Resources
+* https://www.guru99.com/unit-testing-guide.html
+* https://www.techtarget.com/searchsoftwarequality/definition/unit-testing
+* https://angular.io/guide/testing
+* https://jasmine.github.io/tutorials/your_first_suite
+* https://www.tutorialspoint.com/jasminejs
+* https://www.youtube.com/watch?v=emnwsVy8wRs&list=PLoC8Q0moRTSiTBAKWBGiJjFUMpiFdaGdF
+* https://codecraft.tv/courses/angular/unit-testing/asynchronous/
+* https://medium.com/netscape/testing-with-the-angular-httpclient-api-648203820712

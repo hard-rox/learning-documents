@@ -61,9 +61,12 @@
     - [Testing with injected dependency](#testing-with-injected-dependency)
     - [Component with inputs and outputs](#component-with-inputs-and-outputs)
   - [Testing services](#testing-services)
+    - [TestBed Prep](#testbed-prep)
+    - [Testing HTTP services](#testing-http-services)
   - [Testing attribute directives](#testing-attribute-directives)
   - [Testing pipes](#testing-pipes)
-  - [Testing utility APIs](#testing-utility-apis)
+    - [Testing functionality](#testing-functionality)
+    - [Testing with component](#testing-with-component)
 - [Debugging tests](#debugging-tests)
 - [Code coverage](#code-coverage)
 - [Hat Tips \& Resources](#hat-tips--resources)
@@ -1077,11 +1080,220 @@ it("should emit pageSizeChanged on pageSize change", () => {
 ```
 
 ## Testing services
+
+### TestBed Prep
+```ts
+@Injectable({
+  providedIn: 'root',
+})
+export class ApiService {
+  private apiBase: string = 'https://jsonplaceholder.typicode.com';
+  constructor(private http: HttpClient) {}
+
+  getTodo(): Observable<
+    {
+      userId: number;
+      id: number;
+      title: string;
+      completed: boolean;
+    }[]
+  > {
+    return this.http.get<
+      {
+        userId: number;
+        id: number;
+        title: string;
+        completed: boolean;
+      }[]
+    >(this.apiBase + '/todos');
+  }
+}
+```
+```ts
+describe('ApiService', () => {
+  let service: ApiService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [
+        HttpClientTestingModule
+      ],
+      providers: [
+        
+      ]
+    });
+    service = TestBed.inject(ApiService);
+  });
+
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+});
+```
+![Test Result](/.imgs/svc-test-1.png)
+
+### Testing HTTP services
+Data services that make HTTP calls to remote servers typically inject and delegate to the Angular HttpClient service for XHR calls.
+```ts
+describe('ApiService', () => {
+  let service: ApiService;
+  let httpClientSpy: jasmine.SpyObj<HttpClient>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [],
+    });
+    httpClientSpy = jasmine.createSpyObj('HttpClient', ['get']);
+    service = new ApiService(httpClientSpy);
+  });
+
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+
+  it('should return list and http call get once', () => {
+    const mockTodo = [
+      {
+        userId: 1,
+        id: 1,
+        title: 'delectus aut autem',
+        completed: false,
+      },
+      {
+        userId: 1,
+        id: 2,
+        title: 'quis ut nam facilis et officia qui',
+        completed: false,
+      },
+    ];
+    httpClientSpy.get.and.returnValue(of(mockTodo));
+
+    service.getTodo().subscribe({
+      next: (data) => {
+        expect(data).toEqual(mockTodo);
+        expect(httpClientSpy.get.calls.count()).toBe(1);
+      }
+    })
+  });
+});
+```
+
 ## Testing attribute directives
+```ts
+@Directive({
+  selector: '[appHelloWorld]'
+})
+export class HelloWorldDirective {
+
+  constructor(private el: ElementRef) {
+    el.nativeElement.innerHTML = 'Hello world';
+  }
+}
+```
+```html 
+<div appHelloWorld></div>
+```
+![Directive output](/.imgs/directive-test-1.png)
+
+Attribute directives like this one tend to manipulate the DOM. Isolated unit tests don't touch the DOM and, therefore, do not inspire confidence in the directive's efficacy.
+
+A better solution is to create an artificial test component that demonstrates all ways to apply the directive.
+
+```ts
+@Component({
+  template: `<div appHelloWorld></div>`
+})
+class TestComponent { }
+
+fdescribe('HelloWorldDirective', () => {
+  let fixture: ComponentFixture<TestComponent>;
+  let affectedElements: DebugElement[];
+
+  beforeEach(() => {
+    fixture = TestBed.configureTestingModule({
+      declarations: [
+        HelloWorldDirective,
+        TestComponent
+      ]
+    }).createComponent(TestComponent);
+
+    fixture.detectChanges();
+    affectedElements = fixture.debugElement.queryAll(By.directive(HelloWorldDirective));
+  });
+
+  it('should decorate all elements with "Hello world" innerHTML', () => {
+    expect(affectedElements.length).toBe(1);
+    affectedElements.forEach(element => {
+      expect(element.nativeElement.innerHTML).toBe('Hello world');
+    });
+  });
+});
+```
+![Directive Test Result](/.imgs/directive-test-2.png)
+
 ## Testing pipes
-## Testing utility APIs
+
+```ts
+@Pipe({
+  name: 'upperCase'
+})
+export class UpperCasePipe implements PipeTransform {
+  transform(input: string): string {
+    return input.toUpperCase();
+  }
+}
+```
+```html
+<p>{{'hello world' | upperCase}}</p>
+```
+![Pipe output](/.imgs/pipe-test-1.png)
+
+### Testing functionality
+```ts
+fdescribe('UpperCasePipe', () => {
+  it('create an instance', () => {
+    const pipe = new UpperCasePipe();
+    expect(pipe).toBeTruthy();
+  });
+
+  it('should make input upper case', () => {
+    const pipe = new UpperCasePipe();
+    const pipeOutput = pipe.transform('a lower case string');
+    expect(pipeOutput).toBe('A LOWER CASE STRING');
+  });
+});
+```
+
+### Testing with component
+```ts
+@Component({
+  template: `<p>{{'hello world' | upperCase}}</p>`
+})
+class TestComponent { }
+
+fdescribe('UpperCasePipe', () => {
+  let fixture: ComponentFixture<TestComponent>;
+
+  beforeEach(() => {
+    fixture = TestBed.configureTestingModule({
+      declarations: [
+        UpperCasePipe,
+        TestComponent
+      ]
+    }).createComponent(TestComponent);
+
+    fixture.detectChanges();
+  });
+  it('should make input upper case', () => {
+    const el = fixture.nativeElement.querySelector('p');
+    expect(el.innerHTML).toBe('HELLO WORLD');
+  });
+});
+```
 
 # Debugging tests
+
 
 # Code coverage
 

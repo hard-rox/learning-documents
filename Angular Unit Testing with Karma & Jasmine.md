@@ -67,7 +67,6 @@
   - [Testing pipes](#testing-pipes)
     - [Testing functionality](#testing-functionality)
     - [Testing with component](#testing-with-component)
-- [Debugging tests](#debugging-tests)
 - [Code coverage](#code-coverage)
 - [Hat Tips \& Resources](#hat-tips--resources)
 
@@ -1292,10 +1291,17 @@ fdescribe('UpperCasePipe', () => {
 });
 ```
 
-# Debugging tests
-
-
 # Code coverage
+Code coverage reports show you any parts of your code base that might not be properly tested by your unit tests.
+
+```sh
+ng test --no-watch --code-coverage
+```
+This will show code coverage summery and create a coverage report in **/coverage** directory. Where **index.html** file will show coverage report.
+
+![Coverage Summery](/.imgs/code-coverage-1.PNG)
+
+![Coverage Report](/.imgs/code-coverage-2.PNG)
 
 # Hat Tips & Resources
 * https://www.guru99.com/unit-testing-guide.html
